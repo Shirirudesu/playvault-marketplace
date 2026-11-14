@@ -1,0 +1,19 @@
+{
+	admin off
+	auto_https off
+}
+
+:{$PORT:10000} {
+	root * /app/backend/public
+	encode zstd gzip
+
+	@laravel path /api /api/* /sanctum /sanctum/* /up
+	handle @laravel {
+		php_server
+	}
+
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}

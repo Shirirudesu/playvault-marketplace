@@ -1,74 +1,122 @@
-# Deployment readiness notes
+# Render Free + Neon Free deployment guide
 
-This project is a browser SPA and a separate Laravel API. The current checkout is simulated and seeded digital keys are fictional `DEMO-` values; this repository is not ready to accept real payments or distribute real keys. `digital_keys.key_code` is currently stored as plaintext in PostgreSQL. Do not import real keys until application-level at-rest encryption and a safe data migration are added and tested.
+This guide prepares the existing demo app for one Render Docker Web Service and one Neon PostgreSQL project. It does not deploy the app. Checkout, offers, and delivered keys remain fictional demo data; no real payment processing is configured.
 
-## A practical hosting layout
+## 1. Prepare the Neon project
 
-For a low-traffic public demo, a low-ops option is Cloudflare Pages for the static Vite build, Laravel Cloud Starter for the Laravel API, and PostgreSQL managed by Laravel Cloud or a separately managed PostgreSQL 18 provider. Cloudflare Pages lists React/Vite's build output as `dist`; its Free plan currently permits custom domains. Laravel Cloud Starter is pay-as-you-go, not free: new organizations currently get $5 usage credit for 14 days. Check live rates, data retention, restore options, PHP 8.3+ availability, PostgreSQL 18 availability, and `pg_trgm` support before choosing database resources.
+1. In Neon, open the existing PostgreSQL 18 project and choose the intended branch and database.
+2. Use **Connect** to copy the pooled connection string (the hostname contains `-pooler`). Keep it private. The Laravel migration creates `pg_trgm`, which Neon documents as enabled with `CREATE EXTENSION IF NOT EXISTS pg_trgm`.
+3. Keep the connection string for the Render `DB_URL` environment variable. Ensure it includes `sslmode=require`; set `DB_SSLMODE=require` as well. Do not place the URL in this repository or a command literal.
 
-Cloudflare Pages deploy settings:
+The project migration `2026_11_13_000007_add_product_title_trigram_search.php` enables `pg_trgm` and creates the title trigram index. The application does not need a separate extension setup command. If migration reports an extension permission error, stop and check that Neon supports/enables `pg_trgm` for this PostgreSQL version and role; do not bypass the migration.
 
-- Root directory: `frontend`
-- Build command: `npm ci && npm run build`
-- Output directory: `dist`
-- Build environment variable: `VITE_API_BASE_URL=https://api.example.com/api`
+## 2. Create the Render Web Service
 
-Use one registrable domain for both apps, for example `shop.example.com` on Pages and `api.example.com` for Laravel. Sanctum SPA cookie authentication requires a shared top-level domain. The default `*.pages.dev` and `*.laravel.cloud` hostnames do not meet that requirement. Keep the API and database in the same region where possible. Configure the Vite production API URL at build time; it is public client configuration, never a secret.
+1. In Render, create a **Web Service** connected to `Shirirudesu/playvault-marketplace`.
+2. Select the repository root as the root directory, **Docker** as the runtime, `Dockerfile` as the Dockerfile path, and the **Free** instance plan.
+3. Copy the exact HTTPS service URL shown in Render Settings. The URL is assigned by Render; do not assume the suggested example name is available.
+4. Before the first successful start, configure the variables below in Render's environment settings. Substitute the actual service hostname and the Neon pooled URL locally in the dashboard; do not share either secret in chat or commit it.
 
-Other providers are possible. Render documents that PHP requires its Docker runtime, and its free web services spin down and have ephemeral filesystems; its free PostgreSQL database expires after 30 days and has no backups. That combination is for previews, not durable production data. Vercel Hobby is restricted to personal, non-commercial use, so it is not a general marketplace deployment recommendation.
+| Variable | Value |
+| --- | --- |
+| `APP_NAME` | `PlayVault` |
+| `APP_ENV` | `production` |
+| `APP_DEBUG` | `false` |
+| `APP_URL` | `https://<your-render-service>.onrender.com` |
+| `APP_KEY` | One persistent value generated as described below |
+| `DB_CONNECTION` | `pgsql` |
+| `DB_URL` | `<Neon pooled PostgreSQL URL including sslmode=require>` |
+| `DB_SSLMODE` | `require` |
+| `SESSION_DRIVER` | `database` |
+| `SESSION_ENCRYPT` | `true` |
+| `SESSION_SECURE_COOKIE` | `true` |
+| `SESSION_HTTP_ONLY` | `true` |
+| `SESSION_SAME_SITE` | `lax` |
+| `SESSION_DOMAIN` | Leave unset (host-only cookie) |
+| `CACHE_STORE` | `database` |
+| `SANCTUM_STATEFUL_DOMAINS` | `<your-render-service>.onrender.com` (hostname only, no scheme) |
+| `FRONTEND_URL` | `https://<your-render-service>.onrender.com` |
 
-## Production environment settings
+Render terminates public TLS and forwards traffic to the container. Laravel trusts the proxy headers so it recognizes the original HTTPS request. Frontend requests are built with the same-origin path `/api`; `VITE_API_BASE_URL` is set to `/api` during the Docker build. Do not set a production frontend URL or secret as a Vite variable.
 
-Set these in each host's protected environment-variable/secrets UI. Do not put production values in this repository or send credentials in chat.
+Generate `APP_KEY` from a local project checkout, then paste it directly into Render's protected environment settings:
 
-Laravel API environment:
-
-```dotenv
-APP_ENV=production
-APP_DEBUG=false
-APP_URL=https://api.example.com
-APP_KEY=<generate once with php artisan key:generate --show; store as a host secret>
-LOG_LEVEL=warning
-
-DB_CONNECTION=pgsql
-DB_HOST=<managed PostgreSQL host>
-DB_PORT=5432
-DB_DATABASE=<database name>
-DB_USERNAME=<database role>
-DB_PASSWORD=<managed secret>
-DB_SSLMODE=require
-
-FRONTEND_URL=https://shop.example.com
-SANCTUM_STATEFUL_DOMAINS=shop.example.com,api.example.com
-SESSION_DRIVER=database
-SESSION_LIFETIME=120
-SESSION_DOMAIN=.example.com
-SESSION_SECURE_COOKIE=true
-SESSION_SAME_SITE=lax
-SESSION_HTTP_ONLY=true
-SESSION_ENCRYPT=true
+```powershell
+Set-Location C:\Projects\eneba-marketplace\backend
+php artisan key:generate --show
 ```
 
-The existing migrations create Laravel's `sessions` table. Run the additive migrations once on the production database with `php artisan migrate --force` after taking a provider-supported backup/snapshot. Never run `migrate:fresh`, `db:wipe`, or the demo seeder in production. Seed data contains publicly known, non-redeemable sample keys and is for local/demo use only. The digital-key model does not currently encrypt codes at rest; use only demo key values until a tested encryption migration exists.
+Keep the same key across deploys. Do not add it to either `.env.example`, a Docker build argument, a Dockerfile, or Git. If rotated, existing encrypted sessions will no longer be usable.
 
-Vite frontend build environment:
+The Docker entrypoint runs `php artisan migrate --force` before starting FrankenPHP. Laravel applies only pending migrations; it does not reset the schema. This is repeated on container starts/redeploys. The entrypoint never runs seeders.
 
-```dotenv
-VITE_API_BASE_URL=https://api.example.com/api
+## 3. Initialize the empty Neon database once
+
+Render Free Web Services do not provide SSH/shell access or one-off jobs. Run the migrations and demo seeders from your Windows project checkout, before sharing the service with users. This connects only when you run the commands below; it does not modify any local `.env` file. The Neon URL is requested as hidden PowerShell input and is not included in shell history as a command literal.
+
+In a PowerShell terminal:
+
+```powershell
+Set-Location C:\Projects\eneba-marketplace\backend
+$secureDbUrl = Read-Host 'Paste the Neon pooled URL (sslmode=require)' -AsSecureString
+$env:DB_URL = [System.Net.NetworkCredential]::new('', $secureDbUrl).Password
+$env:DB_CONNECTION = 'pgsql'
+$env:DB_SSLMODE = 'require'
+$env:APP_ENV = 'production'
+$env:APP_DEBUG = 'false'
+
+try {
+    php artisan migrate --force
+    if ($LASTEXITCODE -ne 0) { throw 'Neon migrations failed; stop and inspect the error before continuing.' }
+
+    php artisan db:seed --force
+    if ($LASTEXITCODE -ne 0) { throw 'Catalog seeding failed; stop and inspect the error before continuing.' }
+
+    php artisan db:seed --class=ProductInformationSeeder --force
+    if ($LASTEXITCODE -ne 0) { throw 'Product information seeding failed; stop and inspect the error before continuing.' }
+}
+finally {
+    Remove-Item Env:DB_URL, Env:DB_CONNECTION, Env:DB_SSLMODE, Env:APP_ENV, Env:APP_DEBUG -ErrorAction SilentlyContinue
+    Remove-Variable secureDbUrl -ErrorAction SilentlyContinue
+}
 ```
 
-Set `FRONTEND_URL` to the exact SPA origin; `config/cors.php` allows that exact origin with credentials and does not use a wildcard. Keep `SANCTUM_STATEFUL_DOMAINS` as hostnames (no scheme), including ports only when applicable. For sibling HTTPS subdomains, a parent-domain cookie, `Secure`, `HttpOnly`, and `SameSite=Lax` support session and CSRF cookies. Do not use separate unrelated registrable domains for SPA and API: modern browsers restrict the cross-site cookies Sanctum needs. Keep local `SESSION_DOMAIN` unset and local `SESSION_SECURE_COOKIE=false`.
+Run these only against the intended empty Neon branch. The catalog seeder uses upserts and initializes offer quantities and fictional keys. It does not truncate or delete users or orders, but it updates demo products/offers and is **not a production reseed command**: do not run it again after users can purchase. Redeploys run migrations only, so they cannot re-seed or replenish inventory, rewrite order records, or reset users. The separate product information seeder updates descriptive metadata only.
 
-Generate `APP_KEY` once, store it as a secret, and retain it across deploys; rotating it logs out users and invalidates encrypted application data. Keep `APP_DEBUG=false` in production. Use only HTTPS, exact CORS origins, a least-privilege database role, database TLS, provider backups, and a tested restore procedure. Set `VITE_API_BASE_URL` only at build time; Vite variables are bundled into public JavaScript and must never contain credentials.
+If a seed command fails, do not make the service available for checkout. Inspect the failure first; on a still-empty demo database, resolve the cause and complete initialization before users create orders.
 
-## Release checklist
+## 4. Confirm the deployment
 
-1. Review and push the source yourself; this task did not publish or push anything.
-2. Create separate production and staging database resources. Confirm PostgreSQL 18 and `pg_trgm` are supported; migration `2026_11_13_000007` creates the trigram extension for typo-tolerant search.
-3. Configure the secrets above; never copy local `.env` files to the host or image.
-4. Configure the `shop` and `api` subdomains on the same parent domain, TLS, exact CORS origin, and Sanctum stateful host list.
-5. Build the frontend with the production API URL and deploy the Laravel app from `backend/`.
-6. Take a database backup, run `php artisan migrate --force` once, and check `/api/health`, registration, login, logout, order ownership, and checkout replay behavior.
-7. Verify logs do not include credentials, session values, or key codes. Confirm provider backup schedule and perform a restore test before relying on customer data.
+After Render finishes building and starting the service, copy its assigned URL from **Settings**. Update `APP_URL`, `FRONTEND_URL`, and `SANCTUM_STATEFUL_DOMAINS` if the actual hostname differs, then save and redeploy. Confirm:
 
-Pricing and free-tier constraints change. These pages were checked on 2026-11-14: [Cloudflare Pages build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/), [Cloudflare Pages limits](https://developers.cloudflare.com/pages/platform/limits/), [Laravel Cloud pricing](https://marketing.cloud.laravel.com/pricing), [Render free service limits](https://render.com/docs/free), [Render PHP deployment requirements](https://render.com/docs/language-support), and [Vercel Hobby use limits](https://vercel.com/docs/plans/hobby).
+- `/` and refreshed SPA routes such as `/store`, `/products/cyberpunk-2077`, `/login`, and `/orders` serve the React app.
+- `/api/health` returns JSON and `/api/homepage` returns database-backed data.
+- `/sanctum/csrf-cookie` responds and registration/login/logout preserve the same-origin session cookie.
+- Product images and offers load; no browser API request points to localhost.
+
+Use the Render dashboard's **Logs** for build and runtime output. Never add the Neon URL or `APP_KEY` to diagnostic commands or shared logs.
+
+## Troubleshooting
+
+- **Build/startup fails:** inspect Render build/runtime logs. Check the Docker build context is the repository root, all lockfiles are present, the runtime can write Laravel `storage/` and `bootstrap/cache/`, and Render provides the `PORT` value. The container binds Caddy/FrankenPHP to `0.0.0.0:$PORT` (default 10000).
+- **PostgreSQL SSL or connection error:** verify the Neon host/database/user/password copied from the Neon Connect dialog, use its pooled URL, preserve URL encoding, set `DB_SSLMODE=require`, and confirm the Neon project is awake and within its quotas. Do not print `DB_URL` while debugging.
+- **`pg_trgm` migration error:** check Neon extension availability and the role's permission to create the extension. The migration uses `CREATE EXTENSION IF NOT EXISTS`; do not delete migration records or reset the database.
+- **419 CSRF response:** confirm the frontend and API are the same exact HTTPS origin, `SESSION_SECURE_COOKIE=true`, `SESSION_SAME_SITE=lax`, `SESSION_DOMAIN` unset, `APP_URL`/`FRONTEND_URL` match Render's assigned URL, and `SANCTUM_STATEFUL_DOMAINS` contains only its hostname. Clear that site's cookies and retry.
+- **500 response:** inspect Laravel runtime logs in Render. Confirm `APP_KEY` is set, `APP_DEBUG=false`, migrations completed, and Neon credentials/SSL are valid. Keep `APP_DEBUG=false`; do not expose stack traces publicly.
+- **SPA refresh gives 404 or API returns HTML:** check that the deployed image uses the root Caddyfile. `/api/*`, `/sanctum/*`, and `/up` are routed to Laravel; other paths use `index.html` for React Router. The frontend must be built with `/api`.
+
+## Free-tier limitations and persistence
+
+Render Free web services have 512 MB RAM and 0.1 CPU, spin down after 15 minutes without inbound traffic, may take about a minute to wake, can restart, and have an ephemeral filesystem with no persistent disk or shell/one-off jobs. Build the frontend in a separate Docker stage and keep all durable app/session data in PostgreSQL. The image uses a lean FrankenPHP runtime; monitor memory and startup logs.
+
+Neon Free currently includes 100 CU-hours per project monthly, 1 GB PostgreSQL storage per project, 5 GB public network transfer per project monthly, and scales compute to zero after 5 minutes idle. Both services can therefore have cold starts. Free plans are intended for demos and prototypes; neither provider's free tier should be treated as a durable production guarantee. Check current plan limits before use because quotas can change.
+
+### References
+
+- [Render Docker services](https://render.com/docs/docker)
+- [Render web services and port binding](https://render.com/docs/web-services)
+- [Render Free instance limitations](https://render.com/docs/free)
+- [Render compute plans](https://render.com/docs/compute-plans)
+- [Neon `pg_trgm` extension](https://neon.com/docs/extensions/pg_trgm)
+- [Neon plans and Free limits](https://neon.com/docs/introduction/plans)
+- [Neon connection troubleshooting](https://neon.com/docs/connect/connection-errors)
