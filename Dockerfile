@@ -29,6 +29,7 @@ COPY --from=frontend-build /app/frontend/dist ./public
 COPY docker/Caddyfile /etc/frankenphp/Caddyfile
 COPY docker/entrypoint.sh /usr/local/bin/playvault-entrypoint
 RUN chmod +x /usr/local/bin/playvault-entrypoint \
+    && setcap -r /usr/local/bin/frankenphp \
     && mkdir -p bootstrap/cache storage/app/private storage/framework/cache/data storage/framework/sessions storage/framework/testing storage/framework/views storage/logs /config/caddy /data/caddy \
     && chown -R www-data:www-data bootstrap/cache storage /config/caddy /data/caddy
 
