@@ -1,0 +1,50 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+/auth.json
+**/auth.json
+
+# Private keys and local certificates
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+# Local databases and runtime state
+*.sqlite
+*.sqlite-*
+*.db
+*.local
+*.tmp
+*.temp
+*.swp
+*.swo
+*.cache
+
+# Logs
+*.log
+
+# Dependencies and generated files
+**/vendor/
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+
+# Laravel runtime files
+backend/storage/*.key
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/logs/*
+backend/bootstrap/cache/*.php
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

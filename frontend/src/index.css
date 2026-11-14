@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+:root {
+  font-family: Metropolis, Arial, Helvetica, sans-serif;
+  color: #fff;
+  background: #4618ac;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --pv-purple: #4618ac;
+  --pv-purple-dark: #351183;
+  --pv-purple-deep: #1f0a4d;
+  --pv-purple-raised: #5825cc;
+  --pv-purple-accent: #7a4edf;
+  --pv-yellow: #fad318;
+  --pv-mint: #63e3c2;
+  --pv-muted: #b3aac9;
+  --pv-muted-secondary: #9385b2;
+  --pv-green: #84e916;
+  --pv-pink: #e76a8c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 0;
+  min-height: 100vh;
+  background: var(--pv-purple);
+  color: #fff;
+}
+
+button, input, select { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+
+:focus-visible {
+  outline: 2px solid var(--pv-yellow);
+  outline-offset: 2px;
+}
+
+::selection { color: #1f0a4d; background: var(--pv-yellow); }
+
+@layer utilities {
+  [class~="bg-[#17172a]"] { background-color: var(--pv-purple-deep); }
+  [class~="bg-[#101023]"], [class~="bg-[#111124]"] { background-color: var(--pv-purple-dark); }
+  [class~="bg-[#0b0b19]"], [class~="bg-[#141326]"] { background-color: var(--pv-purple-deep); }
+  .text-slate-400 { color: var(--pv-muted); }
+  .text-slate-500 { color: var(--pv-muted-secondary); }
+
+  .rounded-lg { border-radius: 4px; }
+  .rounded-xl, .rounded-2xl, .rounded-3xl { border-radius: 5px; }
+
+  .market-primary {
+    background-color: var(--pv-yellow);
+    color: #1f0a4d;
+    border: 1px solid var(--pv-yellow);
+    border-radius: 4px;
+    font-weight: 800;
+    transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
+  }
+  .market-primary:hover:not(:disabled) { background-color: #ffe253; border-color: #ffe253; }
+  .market-primary:active:not(:disabled) { transform: translateY(1px); }
+  .market-primary:disabled { cursor: not-allowed; opacity: .55; }
+
+  .market-panel {
+    border: 1px solid rgb(255 255 255 / 9%);
+    border-radius: 5px;
+    background: var(--pv-purple-deep);
+  }
+}
