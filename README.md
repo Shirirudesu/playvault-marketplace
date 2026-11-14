@@ -96,14 +96,31 @@ Apply later additive database migrations with `php artisan migrate`. Use `php ar
 
 ## Screenshots
 
-No screenshots are included yet. If prepared, place actual captures in `docs/screenshots/` and reference them here. Suggested filenames:
+Below are screenshots showcasing the PlayVault marketplace and its main features.
 
-- `docs/screenshots/homepage.png`
-- `docs/screenshots/catalog.png`
-- `docs/screenshots/product-detail.png`
-- `docs/screenshots/cart-and-checkout.png`
-- `docs/screenshots/order-history-and-delivery.png`
-- `docs/screenshots/mobile-product-detail.png`
+### Homepage
+
+![Homepage](docs/screenshots/homepage-1.png)
+![Homepage2](docs/screenshots/homepage-2.png)
+
+### Game Catalog
+
+![Game Catalog](docs/screenshots/catalog.png)
+
+### Product Details
+
+![Product Details](docs/screenshots/product-page-1.png)
+![Product Details](docs/screenshots/product-page-2.png)
+
+### Cart and Checkout
+
+![Cart](docs/screenshots/cart.png)
+![Checkout](docs/screenshots/checkout.png)
+
+### Order History and Digital Key Delivery
+
+![Orders](docs/screenshots/orders.png)
+![Digital Key](docs/screenshots/confirmation.png)
 
 ## Demo limitations
 
